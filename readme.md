@@ -13,6 +13,14 @@ Terdiri dengan berbagai file yaitu:
 Berlaku sebagai prototipe untuk mikroservis yang kemudian dikembangkan dengan menggunakan _framework_ **Lumens**, PHP.
 `app.js` adalah satu skrip _JavaScript_ sederhana dengan _NodeJs_ dengan menggunakan _framework_ **Express**.
 
+### Testing API Simpeg/E-RK
+Testing API Simpeg/E-RK adalah sekumpulan _files_ _JavaScript_ untuk mengetes API yang telah dipasang di MANTRA untuk kemudian disambungkan dengan server yang sebenarnya.
+Kumpulan _files_ adalah sebagai berikut:
+1. `fetchinglib.js` yang bertindak sebagai pustaka umum untuk fungsi-fungsi yang sering digunakan.
+2. `tembak-mantra.js` bertindak sebagai pengetesan jalur API secara generik untuk mendapatkan data dari tabel-tabel yang ada di Simpeg/E-RK
+3. `get_pegawai_portal.js` bertindak sebagai pengetesan API untuk mendapatkan informasi pegawai berdasarkan kata kunci yang cari.
+Baik `tembak-mantra.js` maupun `get_pegawai_portal.js` menggunakan fungsi-fungsi umum yang ada di `fetchinglib.js`.
+
 ### `tembak-mantra.js`
 Adalah _file_ untuk mengetes API E-RK yang dibuat untuk MANTRA dan koneksinya ke server tempat aplikasi E-RK.
 
