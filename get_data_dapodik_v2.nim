@@ -3,16 +3,15 @@ from xmltree import `$`, findAll, innerText
 from htmlparser import parseHtml
 from times import parse, Time, TimeInfo, `$`
 from xmlparser import parseXml
-from tables import `[]=`, newTable, `$`, TableRef, pairs, len,
-  contains, `[]`
 import httpclient
 import threadpool
+import tables
 
 import times
 import json
+import db_postgres
 
 import disdik_entry
-import db_postgres
 
 #TODO:
 #1. Test whether async fetch result is not separated too far away from
@@ -120,11 +119,13 @@ echo "syncdata length is ", syncdata.len
 #enable this if all other parts are ok
 proc updateOrInsert(entry: Entry, update = true) =
   if update:
+    echo "update entry ", entry
     db.updateEntry entry
-    #echo "update entry ", entry
+    echo()
   else:
+    echo "insert entry ", entry
     db.insertEntry entry
-    #echo "insert entry ", entry
+    echo()
 
 proc getEntry(link: string, update = true): Entry =
   if update:
