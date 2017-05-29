@@ -1,0 +1,12 @@
+*
+!*.*
+!*/
+
+*.un~
+run_update_dapodik.sh
+
+nimcache/
+
+*.exe
+
+test_*
