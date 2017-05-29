@@ -21,8 +21,5 @@ Kumpulan _files_ adalah sebagai berikut:
 3. `get_pegawai_portal.js` bertindak sebagai pengetesan API untuk mendapatkan informasi pegawai berdasarkan kata kunci yang cari.
 Baik `tembak-mantra.js` maupun `get_pegawai_portal.js` menggunakan fungsi-fungsi umum yang ada di `fetchinglib.js`.
 
-### `tembak-mantra.js`
-Adalah _file_ untuk mengetes API E-RK yang dibuat untuk MANTRA dan koneksinya ke server tempat aplikasi E-RK.
-
 ### `get_lpse_fields.js`
 Adalah file untuk memparsing data hasil LPSE dan hasilnya dicatat di `lpse_fields.txt`
