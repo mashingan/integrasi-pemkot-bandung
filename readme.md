@@ -21,5 +21,7 @@ Kumpulan _files_ adalah sebagai berikut:
 3. `get_pegawai_portal.js` bertindak sebagai pengetesan API untuk mendapatkan informasi pegawai berdasarkan kata kunci yang cari.
 Baik `tembak-mantra.js` maupun `get_pegawai_portal.js` menggunakan fungsi-fungsi umum yang ada di `fetchinglib.js`.
 
+`fetchinglib.js` sudah mendukung protokol `HTTP` dan `HTTP` dengan syarat untuk koneksi `HTTPS` harus menggunakan _port_ 443 pada argumen _options_nya.
+
 ### `get_lpse_fields.js`
 Adalah file untuk memparsing data hasil LPSE dan hasilnya dicatat di `lpse_fields.txt`

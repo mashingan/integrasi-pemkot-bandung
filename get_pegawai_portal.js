@@ -27,7 +27,9 @@ lib.getReq({
   port: 80,
   method: 'GET',
   host: 'mantra.bandung.go.id',
+  //host: 'simpeg.bandung.go.id',
   path: '/mantra/json/diskominfo/portal/query_pegawai/' +
+  //path: '/integrasi/simpeg/pegawai?' +
     'time=' + now +
     '&key=' + lib.getSum(now) +
     '&id=' + lib.reqid +

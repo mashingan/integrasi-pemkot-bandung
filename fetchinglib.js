@@ -1,5 +1,6 @@
 var crypto = require('crypto');
 var http = require('http');
+var https = require('https');
 
 var keys = {'7na9aj3awo': 'ib57tkh5rdjk4mj'};
 var reqid = '7na9aj3awo';
@@ -25,7 +26,8 @@ function toSHA1(data) {
 
 function getReq(options, callback) {
   console.log(options.path);
-  var requesting = http.request(options, function(response) {
+  var prot = options.port === 443? https : http;
+  var requesting = prot.request(options, function(response) {
     var output = "";
     response.setEncoding("utf8");
     response.on("data", function (chunk) {
