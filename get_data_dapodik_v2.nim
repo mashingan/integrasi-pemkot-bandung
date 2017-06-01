@@ -3,6 +3,7 @@ from xmltree import `$`, findAll, innerText
 from htmlparser import parseHtml
 from times import parse, Time, TimeInfo, `$`
 from xmlparser import parseXml
+from os import sleep
 import httpclient
 import threadpool
 import tables
@@ -41,13 +42,6 @@ const totalPage = 55
 let
   dapodik = "http://dapodik.disdikkota.bandung.go.id/?page="
 
-  #enable this when to test postgres connection
-  db = connectPostgres()
-  #[
-  db = open("", "", "",
-    "host=103.24.150.111 user=postgres password= " &
-    "port=5432 dbname=cache_dapodik")
-    ]#
 
 var
   flowpages = newSeq[FlowVar[NpsnMod]](totalPage)
@@ -72,13 +66,15 @@ proc getData(page: int): NpsnMod =
 
     result[npsn] = thetime
 
-var start: float
+#var start: float
 
 
 #TODO: Apparently sync is faster than async, but not so in Windows
 #which gives a more correct timing it seems
 #EDIT: apparently with release compilation, the async indeed faster
 #than sync version in Windows
+
+#[
 start = cpuTime()
 for page in 1 .. totalPage:
   echo "dispatch times: ", page
@@ -104,6 +100,7 @@ for page in flowpages:
 echo "async fetch is ", cpuTime() - start
 echo "newData length is ", newData.len
 #echo $allData
+]#
 
 #enable this for comparison with sync operation
 #[
@@ -117,7 +114,7 @@ echo "syncdata length is ", syncdata.len
 ]#
 
 #enable this if all other parts are ok
-proc updateOrInsert(entry: Entry, update = true) =
+proc updateOrInsert(db: DbConn, entry: Entry, update = true) =
   if update:
     echo "update entry ", entry
     db.updateEntry entry
@@ -133,14 +130,15 @@ proc getEntry(link: string, update = true): Entry =
   else:
     result = client.getContent(link).parseJson["data"][0].getEntry
 
-proc insertSekolah(npsn: string) =
+proc insertSekolah(db: DbConn, npsn: string) =
   let npsnurl = sekolahUrl & "&filter[npsn]=" & npsn
-  updateOrInsert(npsnurl.getEntry false, false)
+  updateOrInsert(db, npsnurl.getEntry false, false)
 
-proc retrieveSekolah(id: string) =
+proc retrieveSekolah(db: DbConn, id: string) =
   let link = sekolahApi & "/" & id & "?token=" & token
-  updateOrInsert link.getEntry
+  updateOrInsert db, link.getEntry
 
+#[
 for npsn, newMod in newData.pairs:
   if npsn in oldData:
     let
@@ -150,3 +148,67 @@ for npsn, newMod in newData.pairs:
       retrieveSekolah oldObj.id
   else:
     insertSekolah npsn
+
+]#
+proc main(db: DbConn) =
+  var start: float
+  start = cpuTime()
+  for page in 1 .. totalPage:
+    echo "dispatch times: ", page
+    flowpages[page-1] = spawn(getData page)
+
+#enable this if the connection with server is ok
+  for row in db.fastRows(sql"select id, npsn, last_modified from sekolah;"):
+    echo row
+    if not row.isNil and row.len >= 3:
+      let
+        id = row[0]
+        npsn = row[1]
+        lastMod = row[2].parse("yyyy-MM-dd' 'HH:mm:ss")
+      oldData[npsn] = IdMod(id: id, lastMod: lastMod)
+
+#sync()
+
+  for page in flowpages:
+    var tabledata = ^page
+    for key, val in tabledata.pairs:
+      newData[key] = val
+
+  echo "async fetch is ", cpuTime() - start
+  echo "newData length is ", newData.len
+  #echo $allData
+
+  for npsn, newMod in newData.pairs:
+    if npsn in oldData:
+      let
+        oldObj = oldData[npsn]
+        oldMod = oldObj.lastMod.toTime
+      if oldMod < newMod.toTime:
+        retrieveSekolah db, oldObj.id
+    else:
+      insertSekolah db, npsn
+
+proc toMilliseconds(hour = 0, minute = 0, second = 0): int =
+  template tsec(x: int): untyped = x * 1000
+  result = hour * 3600.tsec + minute * 60.tsec + second * 100
+
+when isMainModule:
+  #enable this when to test postgres connection
+  let db = connectPostgres()
+    #[
+    db = open("", "", "",
+      "host=103.24.150.111 user=postgres password= " &
+      "port=5432 dbname=cache_dapodik")
+      ]#
+  while true:
+    try:
+      main db
+    except:
+      echo "error happened: ", getCurrentExceptionMsg()
+
+    var
+      now = getTime().getLocalTime()
+      to00 = 23 - now.hour
+      tmin = 59 - now.minute
+      tsec = 59 - now.second
+    sleep toMilliseconds(to00, tmin, tsec)
