@@ -6,7 +6,7 @@ Terdiri dengan berbagai file yaitu:
 
 1. `disdik_entry.nim`, berlaku sebagai file utama yang akan digunakan untuk skrip-skrip lainnya.
 2. `cache_disdik.nim`, mengambil data dari API Dapodik dan membuat database cadangan di server MANTRA.
-3. `get_data_dapodik.nim` dan `get_data_dapodik_v2.nim`, memparsing data dapodik dari halaman http://dapodik.disdikkota.bandung.go.id dan membarukan database yang telah dibuat di poin 2.
+3. `get_data_dapodik.nim` dan `get_data_dapodik_v2.nim`, memparsing data dapodik dari halaman http://dapodik.disdikkota.bandung.go.id dan membarukan database yang telah dibuat di poin 2. `get_data_dapodik_v3.nim` adalah versi yang mendukung untuk dibuat sebagai servis yang bisa dijalankan setiap jam 12 malam.
 4. 
 
 ### `app.js`
