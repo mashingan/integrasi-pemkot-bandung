@@ -8,7 +8,6 @@
  * filter_field=
  * filter_value=
  * page=
- *
  */
 /*
  * Contoh cara pakai:
@@ -18,9 +17,6 @@
 
 var lib = require('./fetchinglib');
 var qs = require('querystring');
-//var mantra = '103.24.150.111:83';
-var mantra = 'mantra.bandung.go.id';
-var path = 'mantra/json/diskominfo/aswd/get_simpeg/lp955o1nj0/limit=?&time=?&key=?&id=?&fields=?&table=?';
 
 var args = lib.objectifyArgs(process.argv);
 var now = Date.now();
@@ -37,7 +33,6 @@ lib.getReq({
     'time=' + now +
     '&key=' + shasum +
     '&id=' + reqid +
-    //'&page=2' +
     '&' + qs.stringify(args),
   headers: {
     'user-agent': 'MANTRA'
