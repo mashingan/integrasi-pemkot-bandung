@@ -26,11 +26,11 @@ proc updateOrInsert(db: DbConn, entry: Entry, update = true) =
     db.insertEntry entry
     echo()
 
-proc getEntry(link: string, update = true): Entry =
+proc getEntry(link: string, client: HttpClient, update = true): Entry =
   if update:
-    result = client.getContent(link).parseJson["data"].getEntry
+    client.getContent(link).parseJson["data"].getEntry
   else:
-    result = client.getContent(link).parseJson["data"][0].getEntry
+    client.getContent(link).parseJson["data"][0].getEntry
 
 proc insertSekolah(db: DbConn, npsn: string) =
   let npsnurl = sekolahUrl & "&filter[npsn]=" & npsn
@@ -51,7 +51,7 @@ proc processEntry(db: DbConn, themod: NpsnInfo) =
     else:
       insertSekolah db, npsn
 
-proc processData(db: DbConn, url: string) =
+proc processData(db: DbConn, client: HttpClient, url: string) =
   var
     toprocess = newTable[string, TimeInfo]()
     html = client.get(url).bodyStream.parseHtml
@@ -80,6 +80,8 @@ when isMainModule:
 
   for page in 1 .. totalPage:
     echo "dispatch times: ", page, " at ", $getTime()
-    db.processData(dapodik & $page)
+    var client = newHttpClient()
+    db.processData(client, dapodik & $page)
     echo()
+    client.close
     sleep 1000

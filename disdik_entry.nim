@@ -4,6 +4,7 @@ import db_postgres
 import json
 import parseopt2
 from strutils import strip
+import tables
 
 var token* =
   "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwOlwvXC9" &
@@ -11,10 +12,33 @@ var token* =
   "CwiZXhwIjoxODA3MTgyMTc0LCJ1c2VybmFtZSI6ImRpc2tvbWluZm9iZGcifQ." &
   "VQAntH-Hb_VOPbEjVtFThG50Mcnfgbm71CRZAXOqLKA"
 
-var client* = newHttpClient()
-var sekolahApi* = "http://dapodik.disdikkota.bandung.go.id/api-dapodik" &
-  "/sekolah"
-var sekolahUrl* = sekolahApi & "?token=" & token
+var
+  client* = newHttpClient()
+  listKepemilikan = {1: "Pemerintah Pusat", 2: "Pemerintah Daerah",
+    3: "Yayasan", 4: "Lainnya"}.toTable
+  listGolongan = newTable[int, string]()
+  listJenjang = {0: "Tidak Sekolah", 1: "PAUD", 2: "TK / sederajat",
+    3: "Putus SD", 4: "SD / sederajat", 5: "SMP / sederajat",
+    6: "SMA / sederajat", 7: "Paket A", 8: "Paket B", 9: "Paket C",
+    20: "D1", 21: "D2", 22: "D3", 23: "D4", 30: "S1", 35: "S2", 40: "S3",
+    90: "Non formal", 91: "Informal", 98: "(tidak diisi)",
+    99: "Lainnya"}.toTable
+
+proc golGenerator(i: int): string =
+  let
+    gol = ["I", "II", "III", "IV"]
+    alp = "abcd"
+  gol[i div gol.len] & "/"  & alp[i mod alp.len]
+
+for i in 1 .. 16:
+  listGolongan[i] = golGenerator (i-1)
+listGolongan[17] = "IV/e"
+listGolongan[99] = "-"
+
+let
+  dapodikApi* = "http://dapodik.disdikkota.bandung.go.id/api-dapodik/"
+  sekolahApi* = dapodikApi & "sekolah"
+  sekolahUrl* = sekolahApi & "?token=" & token
 
 type
   Entry* = object
@@ -22,6 +46,10 @@ type
     kecamatan*, lintang*, bujur*: string
     jumlahSiswaLakiLaki*, jumlahSiswaPerempuan*: BiggestInt
     lastModified*: Time
+    link*, emailKepsek*, hpKepsek*, nikKepsek*: string
+    pangkatGolonganId*, jenjangId*: BiggestInt
+    pangkatGolongan*, jenjang*, statusKepemilikan: string
+
 
 proc connectPostgres*(): DbConn =
   var options = """
@@ -90,8 +118,13 @@ proc getEntry*(item: JsonNode): Entry =
       kelurahan = sekolah["desa_kelurahan"].getStr
       lintang = sekolah["lintang"].getStr
       bujur = sekolah["bujur"].getStr
+      sekolahMilik =
+        listKepemilikan[sekolah["status_kepemilikan_id"].getNum.int]
+      sekolahJenjangId = sekolah["jenjang_pendidikan_id"].getNum
+      sekolahJenjang = listJenjang[sekolahJenjangId.int]
 
-    var link: string
+    var
+      link: string
     try:
       link = item["links"]["self"].getStr()
     except KeyError:
@@ -120,16 +153,29 @@ proc getEntry*(item: JsonNode): Entry =
     let
       kepsek = client.getContent(toKepsek).parseJson["data"]
       kepsekDataId = kepsek["attributes"]["kepala_sekolah_id"].getStr
-    var kepsekNama, kepsekNip: string
+    var
+      kepsekNama, kepsekNip, kepsekNik: string
+      kepsekGolId: BiggestInt
+      kepsekGol, kepsekHp, kepsekEmail: string
     #echo "kepsek data id: ", kepsekDataId
     if kepsekDataId.isNil or kepsekDataId == "null" or kepsekDataId == "":
       kepsekNama = ""
       kepsekNip = ""
+      kepsekNik = ""
+      kepsekGolId = 0
+      kepsekGol = listGolongan[99]
+      kepsekEmail = ""
+      kepsekHp = ""
     else:
       let kepsekInfo =
         kepsek["relationships"]["kepala_sekola"]["attributes"]
       kepsekNama = kepsekInfo["nama"].getStr
       kepsekNip = kepsekInfo["nip"].getStr
+      kepsekNik = kepsekInfo["nik"].getStr
+      kepsekGolId = kepsekInfo["pangkat_golongan_id"].getNum
+      kepsekHp = kepsekInfo["no_hp"].getStr
+      kepsekEmail = kepsekInfo["email"].getStr
+      kepsekGol = listGolongan[kepsekGolId.int]
 
     let
       toSemester = link & "/tahun/" & $year & "/semester/" &
@@ -163,6 +209,10 @@ proc getEntry*(item: JsonNode): Entry =
       npsn: npsn,
       namaKepsek: kepsekNama,
       nipKepsek: kepsekNip,
+      link: link,
+      emailKepsek: kepsekEmail,
+      hpKepsek: kepsekHp,
+      nikKepsek: kepsekNik,
       alamat: alamat,
       kelurahan: kelurahan,
       kecamatan: kecamatan,
@@ -170,7 +220,12 @@ proc getEntry*(item: JsonNode): Entry =
       bujur: bujur,
       jumlahSiswaLakiLaki: jumlahSiswaLakiLaki,
       jumlahSiswaPerempuan: jumlahSiswaPerempuan,
-      lastModified: getTime()
+      lastModified: getTime(),
+      pangkatGolonganId: kepsekGolId,
+      pangkatGolongan: kepsekGol,
+      statusKepemilikan: sekolahMilik,
+      jenjangId: sekolahJenjangId,
+      jenjang: sekolahJenjang
     )
   except KeyError:
     echo "error something happens: ", getCurrentExceptionMsg()
@@ -183,12 +238,15 @@ proc insertEntry*(db: DbConn, entry: Entry) =
 insert into public.sekolah
   (id, nama, npsn, nama_kepsek, nip_kepsek, alamat, kelurahan, kecamatan,
   lintang, bujur, jumlah_siswa_laki_laki, jumlah_siswa_perempuan,
-  last_modified)
+  last_modified, nik_kepsek, pangkat_golongan_id, pangkat_golongan,
+  no_hp, email, link, status_kepemilikan, jenjang_id, jenjang)
   values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);"""),
       entry.id, entry.nama, entry.npsn, entry.namaKepsek, entry.nipKepsek,
       entry.alamat, entry.kelurahan, entry.kecamatan, entry.lintang,
       entry.bujur, entry.jumlahSiswaLakiLaki, entry.jumlahSiswaPerempuan,
-      $entry.lastModified
+      $entry.lastModified, entry.nikKepsek, $entry.pangkatGolonganId,
+      entry.pangkatGolongan, entry.hpKepsek, entry.emailKepsek, entry.link,
+      entry.statusKepemilikan, $entry.jenjangId, entry.jenjang
     )
   except DbError:
     echo "error inserting: ", getCurrentExceptionMsg()
