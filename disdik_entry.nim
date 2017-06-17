@@ -13,7 +13,6 @@ var token* =
   "VQAntH-Hb_VOPbEjVtFThG50Mcnfgbm71CRZAXOqLKA"
 
 var
-  client* = newHttpClient()
   listKepemilikan = {1: "Pemerintah Pusat", 2: "Pemerintah Daerah",
     3: "Yayasan", 4: "Lainnya"}.toTable
   listGolongan = newTable[int, string]()
@@ -106,6 +105,7 @@ Any connection error will quit the program with QuitFailure (-1) exit code.
 
 
 proc getEntry*(item: JsonNode): Entry =
+  var client = newHttpClient()
   try:
     let sekolah = item["attributes"]
 
@@ -123,13 +123,9 @@ proc getEntry*(item: JsonNode): Entry =
       sekolahJenjangId = sekolah["jenjang_pendidikan_id"].getNum
       sekolahJenjang = listJenjang[sekolahJenjangId.int]
 
-    var
-      link: string
-    try:
-      link = item["links"]["self"].getStr()
-    except KeyError:
+    let
       link = sekolahApi & "/" & id
-    let detailSekolah = link & "?token=" & token
+      detailSekolah = link & "?token=" & token
     #echo "detailSekolah: ", detailSekolah
     
     # getting and filling sekolah detail 2
@@ -188,21 +184,8 @@ proc getEntry*(item: JsonNode): Entry =
         parseJson["data"]["attributes"]
       jumlahSiswaLakiLaki = detailSemester["jumlah_siswa_laki_laki"].getNum
       jumlahSiswaPerempuan = detailSemester["jumlah_siswa_perempuan"].getNum
-    #[
-    echo "nama sekolah ", nama
-    echo "npsn sekolah ", npsn
-    echo "nama kepsek ", kepsekNama
-    echo "nip kepsek ", kepsekNip
-    echo "alamat ", alamat
-    echo "kelurahan ", kelurahan
-    echo "kecamatan ", kecamatan
-    echo "link sekolah ", link
-    echo "lintang ", lintang
-    echo "bujur ", bujur
-    echo "Jumlah siswa laki-laki ", $ jumlahSiswaLakiLaki
-    echo "Jumlah siswa perempuan ", $ jumlahSiswaPerempuan
-    echo()
-    ]#
+
+    client.close
     Entry(
       id: id,
       nama: nama,
@@ -229,18 +212,20 @@ proc getEntry*(item: JsonNode): Entry =
     )
   except KeyError:
     echo "error something happens: ", getCurrentExceptionMsg()
+    client.close
     Entry()
+  # end of `proc getEntry`
 
 
-proc insertEntry*(db: DbConn, entry: Entry) =
+proc insertEntry*(db: DbConn, tableName: string, entry: Entry) =
   try:
     db.exec(sql("""
-insert into public.sekolah
+insert into ?
   (id, nama, npsn, nama_kepsek, nip_kepsek, alamat, kelurahan, kecamatan,
   lintang, bujur, jumlah_siswa_laki_laki, jumlah_siswa_perempuan,
   last_modified, nik_kepsek, pangkat_golongan_id, pangkat_golongan,
   no_hp, email, link, status_kepemilikan, jenjang_id, jenjang)
-  values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);"""),
+  values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);"""), tableName,
       entry.id, entry.nama, entry.npsn, entry.namaKepsek, entry.nipKepsek,
       entry.alamat, entry.kelurahan, entry.kecamatan, entry.lintang,
       entry.bujur, entry.jumlahSiswaLakiLaki, entry.jumlahSiswaPerempuan,
@@ -252,9 +237,9 @@ insert into public.sekolah
     echo "error inserting: ", getCurrentExceptionMsg()
 
 
-proc updateEntry*(db: DbConn, entry: Entry) =
+proc updateEntry*(db: DbConn, tableName: string, entry: Entry) =
   try:
     db.exec(sql"delete from sekolah where npsn = ?;", entry.npsn)
-    db.insertEntry entry
+    db.insertEntry tableName, entry
   except DbError:
     echo "error happened: ", getCurrentExceptionMsg()

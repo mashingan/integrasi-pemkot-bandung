@@ -12,11 +12,10 @@ proc nextPage(page: int): string =
   sekolahDapodik & $page
 
 
-#db.exec(sql"drop table if exists public.sekolah")
-
 #for page in 1 .. 55:
 #var page = 1
 when isMainModule:
+  #[
   var page: int
   if paramCount() < 1:
     echo "Please supply the page number"
@@ -33,11 +32,14 @@ when isMainModule:
     echo "Wrong value supplied ", paramStr(1)
     quit QuitFailure
 
+  ]#
   let db = connectPostgres()
-  var noTable: bool
+  #db.exec(sql"drop table if exists public.sekolah")
+
+  var noTable = true
 
   try:
-    db.exec(sql"""create table if not exists public.sekolah (
+    db.exec(sql"""create table if not exists public.sekolah2 (
       id varchar(50) not null,
       nama varchar(50) not null,
       npsn varchar(50) not null,
@@ -61,19 +63,22 @@ when isMainModule:
       jumlah_siswa_laki_laki int,
       jumlah_siswa_perempuan int
       )""")
-    noTable = true
+    noTable = false
   except DbError:
     echo "Cannot create table: ", getCurrentExceptionMsg()
-    noTable = false
+    noTable = true
 
-  let dataSekolah = client.getContent(nextPage page).parseJson["data"]
-  for item in dataSekolah.items:
-    if not noTable:
+  for page in 1 .. 55:
+    if noTable:
       break
+    var client = newHttpClient()
+    let dataSekolah = client.getContent(nextPage page).parseJson["data"]
+    for item in dataSekolah.items:
 
-    #echo "fetching ok"
-    echo item
-    var entry = item.getEntry
-    echo entry
-    echo()
-    db.insertEntry entry
+      #echo "fetching ok"
+      echo item
+      var entry = item.getEntry
+      echo entry
+      echo()
+      db.insertEntry "public.sekolah2", entry
+    client.close
