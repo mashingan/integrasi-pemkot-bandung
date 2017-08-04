@@ -13,7 +13,7 @@ var token* =
   "VQAntH-Hb_VOPbEjVtFThG50Mcnfgbm71CRZAXOqLKA"
 
 var
-  listKepemilikan = {1: "Pemerintah Pusat", 2: "Pemerintah Daerah",
+  listKepemilikan = {0: "", 1: "Pemerintah Pusat", 2: "Pemerintah Daerah",
     3: "Yayasan", 4: "Lainnya"}.toTable
   listGolongan = newTable[int, string]()
   listJenjang = {0: "Tidak Sekolah", 1: "PAUD", 2: "TK / sederajat",
@@ -29,8 +29,9 @@ proc golGenerator(i: int): string =
     alp = "abcd"
   gol[i div gol.len] & "/"  & alp[i mod alp.len]
 
+listGolongan[0] = ""
 for i in 1 .. 16:
-  listGolongan[i] = golGenerator (i-1)
+  listGolongan[i] = golGenerator(i-1)
 listGolongan[17] = "IV/e"
 listGolongan[99] = "-"
 
@@ -104,8 +105,7 @@ Any connection error will quit the program with QuitFailure (-1) exit code.
     toquit QuitFailure
 
 
-proc getEntry*(item: JsonNode): Entry =
-  var client = newHttpClient()
+proc getEntry*(item: JsonNode, client: var HttpClient): Entry =
   try:
     let sekolah = item["attributes"]
 
@@ -129,9 +129,20 @@ proc getEntry*(item: JsonNode): Entry =
     #echo "detailSekolah: ", detailSekolah
     
     # getting and filling sekolah detail 2
+    var detail: JsonNode
+    while true:
+      try:
+        detail = client.getContent(detailSekolah).
+          parseJson["data"]["relationships"]
+        break
+      except:
+        client = newHttpClient()
+
     let
+      #[
       detail = client.getContent(detailSekolah).
         parseJson["data"]["relationships"]
+      ]#
       kecamatan = detail["kecamatan"]["attributes"]["nama"].getStr
 
     # getting year and semester
@@ -146,8 +157,15 @@ proc getEntry*(item: JsonNode): Entry =
       toKepsek = link & "/tahun/" & $year & "?token=" & token
     #echo "toKepsek ", toKepsek
 
+    var kepsek: JsonNode
+    while true:
+      try:
+        kepsek = client.getContent(toKepsek).parseJson["data"]
+        break
+      except:
+        client = newHttpClient()
     let
-      kepsek = client.getContent(toKepsek).parseJson["data"]
+      #kepsek = client.getContent(toKepsek).parseJson["data"]
       kepsekDataId = kepsek["attributes"]["kepala_sekolah_id"].getStr
     var
       kepsekNama, kepsekNip, kepsekNik: string
@@ -179,13 +197,22 @@ proc getEntry*(item: JsonNode): Entry =
 
     #echo "toSemester ", toSemester
 
+    var detailSemester: JsonNode
+    while true:
+      try:
+        detailSemester = client.getContent(toSemester).
+          parseJson["data"]["attributes"]
+        break
+      except:
+        client = newHttpClient()
     let
+      #[
       detailSemester = client.getContent(toSemester).
         parseJson["data"]["attributes"]
+      ]#
       jumlahSiswaLakiLaki = detailSemester["jumlah_siswa_laki_laki"].getNum
       jumlahSiswaPerempuan = detailSemester["jumlah_siswa_perempuan"].getNum
 
-    client.close
     Entry(
       id: id,
       nama: nama,
@@ -212,7 +239,6 @@ proc getEntry*(item: JsonNode): Entry =
     )
   except KeyError:
     echo "error something happens: ", getCurrentExceptionMsg()
-    client.close
     Entry()
   # end of `proc getEntry`
 
@@ -220,12 +246,13 @@ proc getEntry*(item: JsonNode): Entry =
 proc insertEntry*(db: DbConn, tableName: string, entry: Entry) =
   try:
     db.exec(sql("""
-insert into ?
+insert into """ & tableName & """
   (id, nama, npsn, nama_kepsek, nip_kepsek, alamat, kelurahan, kecamatan,
   lintang, bujur, jumlah_siswa_laki_laki, jumlah_siswa_perempuan,
   last_modified, nik_kepsek, pangkat_golongan_id, pangkat_golongan,
   no_hp, email, link, status_kepemilikan, jenjang_id, jenjang)
-  values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);"""), tableName,
+  values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+  ?, ?, ?, ?);"""),
       entry.id, entry.nama, entry.npsn, entry.namaKepsek, entry.nipKepsek,
       entry.alamat, entry.kelurahan, entry.kecamatan, entry.lintang,
       entry.bujur, entry.jumlahSiswaLakiLaki, entry.jumlahSiswaPerempuan,

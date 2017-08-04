@@ -3,6 +3,7 @@ import httpclient
 import json
 from os import paramCount, paramStr
 from strutils import parseInt
+import times
 
 import disdik_entry
 
@@ -34,7 +35,7 @@ when isMainModule:
 
   ]#
   let db = connectPostgres()
-  #db.exec(sql"drop table if exists public.sekolah")
+  db.exec(sql"drop table if exists public.sekolah2")
 
   var noTable = true
 
@@ -50,8 +51,8 @@ when isMainModule:
       pangkat_golongan varchar(20),
       no_hp varchar(20),
       email varchar(50),
-      link varchar(50),
-      last_modified date not null,
+      link text,
+      last_modified timestamp not null,
       alamat text,
       kelurahan varchar(50),
       kecamatan varchar(50),
@@ -68,17 +69,34 @@ when isMainModule:
     echo "Cannot create table: ", getCurrentExceptionMsg()
     noTable = true
 
-  for page in 1 .. 55:
+  var
+    start = cpuTime()
+    count = 0
+    client = newHttpClient()
+
+  var page = 1
+  while page <= 55:
+  #for page in 1 .. 55:
     if noTable:
       break
-    var client = newHttpClient()
-    let dataSekolah = client.getContent(nextPage page).parseJson["data"]
+    echo "dispatch time ", page, " at ", $getTime()
+    var dataSekolah: JsonNode
+    try:
+      dataSekolah = client.getContent(nextPage page).parseJson["data"]
+    except:
+      client = newHttpClient()
+      continue
+    #let dataSekolah = client.getContent(nextPage page).parseJson["data"]
     for item in dataSekolah.items:
 
       #echo "fetching ok"
-      echo item
-      var entry = item.getEntry
+      #echo item
+      echo "process item ", count+1, " at ", $getTime()
+      var entry = item.getEntry client
       echo entry
       echo()
       db.insertEntry "public.sekolah2", entry
-    client.close
+      inc count
+    inc page
+  echo "elapsed time ", cpuTime() - start
+  echo count, " items processed"
