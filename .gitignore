@@ -3,6 +3,9 @@
 !*/
 
 *.un~
+STAR_bandung_go_id.sh
+mantra.includesprivatekey.pem
+
 run_update_dapodik.sh
 
 nimcache/

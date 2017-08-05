@@ -4,6 +4,7 @@ import db_postgres
 import json
 import parseopt2
 from strutils import strip
+import tables
 
 var token* =
   "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwOlwvXC9" &
@@ -11,10 +12,33 @@ var token* =
   "CwiZXhwIjoxODA3MTgyMTc0LCJ1c2VybmFtZSI6ImRpc2tvbWluZm9iZGcifQ." &
   "VQAntH-Hb_VOPbEjVtFThG50Mcnfgbm71CRZAXOqLKA"
 
-var client* = newHttpClient()
-var sekolahApi* = "http://dapodik.disdikkota.bandung.go.id/api-dapodik" &
-  "/sekolah"
-var sekolahUrl* = sekolahApi & "?token=" & token
+var
+  listKepemilikan = {0: "", 1: "Pemerintah Pusat", 2: "Pemerintah Daerah",
+    3: "Yayasan", 4: "Lainnya"}.toTable
+  listGolongan = newTable[int, string]()
+  listJenjang = {0: "Tidak Sekolah", 1: "PAUD", 2: "TK / sederajat",
+    3: "Putus SD", 4: "SD / sederajat", 5: "SMP / sederajat",
+    6: "SMA / sederajat", 7: "Paket A", 8: "Paket B", 9: "Paket C",
+    20: "D1", 21: "D2", 22: "D3", 23: "D4", 30: "S1", 35: "S2", 40: "S3",
+    90: "Non formal", 91: "Informal", 98: "(tidak diisi)",
+    99: "Lainnya"}.toTable
+
+proc golGenerator(i: int): string =
+  let
+    gol = ["I", "II", "III", "IV"]
+    alp = "abcd"
+  gol[i div gol.len] & "/"  & alp[i mod alp.len]
+
+listGolongan[0] = ""
+for i in 1 .. 16:
+  listGolongan[i] = golGenerator(i-1)
+listGolongan[17] = "IV/e"
+listGolongan[99] = "-"
+
+let
+  dapodikApi* = "http://dapodik.disdikkota.bandung.go.id/api-dapodik/"
+  sekolahApi* = dapodikApi & "sekolah"
+  sekolahUrl* = sekolahApi & "?token=" & token
 
 type
   Entry* = object
@@ -22,6 +46,10 @@ type
     kecamatan*, lintang*, bujur*: string
     jumlahSiswaLakiLaki*, jumlahSiswaPerempuan*: BiggestInt
     lastModified*: Time
+    link*, emailKepsek*, hpKepsek*, nikKepsek*: string
+    pangkatGolonganId*, jenjangId*: BiggestInt
+    pangkatGolongan*, jenjang*, statusKepemilikan: string
+
 
 proc connectPostgres*(): DbConn =
   var options = """
@@ -77,7 +105,7 @@ Any connection error will quit the program with QuitFailure (-1) exit code.
     toquit QuitFailure
 
 
-proc getEntry*(item: JsonNode): Entry =
+proc getEntry*(item: JsonNode, client: var HttpClient): Entry =
   try:
     let sekolah = item["attributes"]
 
@@ -90,19 +118,31 @@ proc getEntry*(item: JsonNode): Entry =
       kelurahan = sekolah["desa_kelurahan"].getStr
       lintang = sekolah["lintang"].getStr
       bujur = sekolah["bujur"].getStr
+      sekolahMilik =
+        listKepemilikan[sekolah["status_kepemilikan_id"].getNum.int]
+      sekolahJenjangId = sekolah["jenjang_pendidikan_id"].getNum
+      sekolahJenjang = listJenjang[sekolahJenjangId.int]
 
-    var link: string
-    try:
-      link = item["links"]["self"].getStr()
-    except KeyError:
+    let
       link = sekolahApi & "/" & id
-    let detailSekolah = link & "?token=" & token
+      detailSekolah = link & "?token=" & token
     #echo "detailSekolah: ", detailSekolah
     
     # getting and filling sekolah detail 2
+    var detail: JsonNode
+    while true:
+      try:
+        detail = client.getContent(detailSekolah).
+          parseJson["data"]["relationships"]
+        break
+      except:
+        client = newHttpClient()
+
     let
+      #[
       detail = client.getContent(detailSekolah).
         parseJson["data"]["relationships"]
+      ]#
       kecamatan = detail["kecamatan"]["attributes"]["nama"].getStr
 
     # getting year and semester
@@ -117,19 +157,39 @@ proc getEntry*(item: JsonNode): Entry =
       toKepsek = link & "/tahun/" & $year & "?token=" & token
     #echo "toKepsek ", toKepsek
 
+    var kepsek: JsonNode
+    while true:
+      try:
+        kepsek = client.getContent(toKepsek).parseJson["data"]
+        break
+      except:
+        client = newHttpClient()
     let
-      kepsek = client.getContent(toKepsek).parseJson["data"]
+      #kepsek = client.getContent(toKepsek).parseJson["data"]
       kepsekDataId = kepsek["attributes"]["kepala_sekolah_id"].getStr
-    var kepsekNama, kepsekNip: string
+    var
+      kepsekNama, kepsekNip, kepsekNik: string
+      kepsekGolId: BiggestInt
+      kepsekGol, kepsekHp, kepsekEmail: string
     #echo "kepsek data id: ", kepsekDataId
     if kepsekDataId.isNil or kepsekDataId == "null" or kepsekDataId == "":
       kepsekNama = ""
       kepsekNip = ""
+      kepsekNik = ""
+      kepsekGolId = 0
+      kepsekGol = listGolongan[99]
+      kepsekEmail = ""
+      kepsekHp = ""
     else:
       let kepsekInfo =
         kepsek["relationships"]["kepala_sekola"]["attributes"]
       kepsekNama = kepsekInfo["nama"].getStr
       kepsekNip = kepsekInfo["nip"].getStr
+      kepsekNik = kepsekInfo["nik"].getStr
+      kepsekGolId = kepsekInfo["pangkat_golongan_id"].getNum
+      kepsekHp = kepsekInfo["no_hp"].getStr
+      kepsekEmail = kepsekInfo["email"].getStr
+      kepsekGol = listGolongan[kepsekGolId.int]
 
     let
       toSemester = link & "/tahun/" & $year & "/semester/" &
@@ -137,32 +197,32 @@ proc getEntry*(item: JsonNode): Entry =
 
     #echo "toSemester ", toSemester
 
+    var detailSemester: JsonNode
+    while true:
+      try:
+        detailSemester = client.getContent(toSemester).
+          parseJson["data"]["attributes"]
+        break
+      except:
+        client = newHttpClient()
     let
+      #[
       detailSemester = client.getContent(toSemester).
         parseJson["data"]["attributes"]
+      ]#
       jumlahSiswaLakiLaki = detailSemester["jumlah_siswa_laki_laki"].getNum
       jumlahSiswaPerempuan = detailSemester["jumlah_siswa_perempuan"].getNum
-    #[
-    echo "nama sekolah ", nama
-    echo "npsn sekolah ", npsn
-    echo "nama kepsek ", kepsekNama
-    echo "nip kepsek ", kepsekNip
-    echo "alamat ", alamat
-    echo "kelurahan ", kelurahan
-    echo "kecamatan ", kecamatan
-    echo "link sekolah ", link
-    echo "lintang ", lintang
-    echo "bujur ", bujur
-    echo "Jumlah siswa laki-laki ", $ jumlahSiswaLakiLaki
-    echo "Jumlah siswa perempuan ", $ jumlahSiswaPerempuan
-    echo()
-    ]#
+
     Entry(
       id: id,
       nama: nama,
       npsn: npsn,
       namaKepsek: kepsekNama,
       nipKepsek: kepsekNip,
+      link: link,
+      emailKepsek: kepsekEmail,
+      hpKepsek: kepsekHp,
+      nikKepsek: kepsekNik,
       alamat: alamat,
       kelurahan: kelurahan,
       kecamatan: kecamatan,
@@ -170,33 +230,43 @@ proc getEntry*(item: JsonNode): Entry =
       bujur: bujur,
       jumlahSiswaLakiLaki: jumlahSiswaLakiLaki,
       jumlahSiswaPerempuan: jumlahSiswaPerempuan,
-      lastModified: getTime()
+      lastModified: getTime(),
+      pangkatGolonganId: kepsekGolId,
+      pangkatGolongan: kepsekGol,
+      statusKepemilikan: sekolahMilik,
+      jenjangId: sekolahJenjangId,
+      jenjang: sekolahJenjang
     )
   except KeyError:
     echo "error something happens: ", getCurrentExceptionMsg()
     Entry()
+  # end of `proc getEntry`
 
 
-proc insertEntry*(db: DbConn, entry: Entry) =
+proc insertEntry*(db: DbConn, tableName: string, entry: Entry) =
   try:
     db.exec(sql("""
-insert into public.sekolah
+insert into """ & tableName & """
   (id, nama, npsn, nama_kepsek, nip_kepsek, alamat, kelurahan, kecamatan,
   lintang, bujur, jumlah_siswa_laki_laki, jumlah_siswa_perempuan,
-  last_modified)
-  values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);"""),
+  last_modified, nik_kepsek, pangkat_golongan_id, pangkat_golongan,
+  no_hp, email, link, status_kepemilikan, jenjang_id, jenjang)
+  values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+  ?, ?, ?, ?);"""),
       entry.id, entry.nama, entry.npsn, entry.namaKepsek, entry.nipKepsek,
       entry.alamat, entry.kelurahan, entry.kecamatan, entry.lintang,
       entry.bujur, entry.jumlahSiswaLakiLaki, entry.jumlahSiswaPerempuan,
-      $entry.lastModified
+      $entry.lastModified, entry.nikKepsek, $entry.pangkatGolonganId,
+      entry.pangkatGolongan, entry.hpKepsek, entry.emailKepsek, entry.link,
+      entry.statusKepemilikan, $entry.jenjangId, entry.jenjang
     )
   except DbError:
     echo "error inserting: ", getCurrentExceptionMsg()
 
 
-proc updateEntry*(db: DbConn, entry: Entry) =
+proc updateEntry*(db: DbConn, tableName: string, entry: Entry) =
   try:
     db.exec(sql"delete from sekolah where npsn = ?;", entry.npsn)
-    db.insertEntry entry
+    db.insertEntry tableName, entry
   except DbError:
     echo "error happened: ", getCurrentExceptionMsg()

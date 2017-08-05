@@ -46,10 +46,17 @@ function getSum(now) {
   return toSHA1(tokey);
 }
 
+function getFieldAndDelete(obj, field) {
+  var result = obj[field];
+  delete obj[field];
+  return result;
+}
+
 module.exports = {
   objectifyArgs: objectifyArgs,
   toSHA1: toSHA1,
   reqid: reqid,
   getReq: getReq,
-  getSum: getSum
+  getSum: getSum,
+  getFieldAndDelete: getFieldAndDelete
 };

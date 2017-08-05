@@ -1,7 +1,6 @@
 from strutils import strip
 from xmltree import `$`, findAll, innerText
 from htmlparser import parseHtml
-from os import sleep
 import json, db_postgres, httpclient, tables, times
 
 import disdik_entry
@@ -20,28 +19,32 @@ var dbModSekolah = newTable[string, IdMod]()
 
 proc updateOrInsert(db: DbConn, entry: Entry, update = true) =
   if update:
-    echo "update entry ", entry
     db.updateEntry dbtable, entry
+    echo "updated entry ", entry
   else:
-    echo "insert entry ", entry
     db.insertEntry dbtable, entry
+    echo "inserted entry ", entry
   echo()
 
-proc getEntry(link: string, client: HttpClient, update = true): Entry =
-  if update:
-    client.getContent(link).parseJson["data"].getEntry
-  else:
-    client.getContent(link).parseJson["data"][0].getEntry
+proc getEntry(link: string, client: var HttpClient, update = true): Entry =
+  while true:
+    try:
+      if update:
+        return client.getContent(link).parseJson["data"].getEntry client
+      else:
+        return client.getContent(link).parseJson["data"][0].getEntry client
+    except:
+      client = newHttpClient()
 
-proc insertSekolah(db: DbConn, client: HttpClient, npsn: string) =
+proc insertSekolah(db: DbConn, client: var HttpClient, npsn: string) =
   let npsnurl = sekolahUrl & "&filter[npsn]=" & npsn
   updateOrInsert(db, npsnurl.getEntry(client, false), false)
 
-proc retrieveSekolah(db: DbConn, client: HttpClient, id: string) =
+proc retrieveSekolah(db: DbConn, client: var HttpClient, id: string) =
   let link = sekolahApi & "/" & id & "?token=" & token
   updateOrInsert(db, link.getEntry client)
 
-proc processEntry(db: DbConn, client: HttpClient, themod: NpsnInfo) =
+proc processEntry(db: DbConn, client: var HttpClient, themod: NpsnInfo): bool =
   for npsn, newMod in themod.pairs:
     if npsn in dbModSekolah:
       let
@@ -49,10 +52,12 @@ proc processEntry(db: DbConn, client: HttpClient, themod: NpsnInfo) =
         oldMod = oldObj.lastMod.toTime
       if oldMod < newMod.toTime:
         retrieveSekolah db, client, oldObj.id
+        result = true
     else:
       insertSekolah db, client, npsn
+      result = true
 
-proc processData(db: DbConn, client: HttpClient, url: string) =
+proc processData(db: DbConn, client: var HttpClient, url: string): bool =
   var
     toprocess = newTable[string, TimeInfo]()
     html = client.get(url).bodyStream.parseHtml
@@ -83,5 +88,10 @@ when isMainModule:
 
   for page in 1 .. totalPage:
     echo "dispatch times: ", page, " at ", $getTime()
-    db.processData(client, dapodik & $page)
-    echo()
+    try:
+      if not db.processData(client, dapodik & $page):
+        break
+      echo()
+    except:
+      echo "something wrong happened: ", getCurrentExceptionMsg()
+      client = newHttpClient()
