@@ -5,3 +5,4 @@ import mantra_bpka_test
 import mantra_blp_test
 import mantra_bkd_test
 import mantra_disdukcapil_test
+import mantra_dlhk_test

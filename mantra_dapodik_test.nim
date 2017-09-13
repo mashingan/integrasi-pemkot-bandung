@@ -81,3 +81,12 @@ suite "Test Dapodik API":
     except:
       echo getCurrentExceptionMsg()
       fail()
+
+  test "lihat nama, alamat, dan jumlah siswa derajat SD":
+    "".runtestOf("sd".getUrl)
+
+  test "lihat nama, alamat, dan jumlah siswa derajat SMP":
+    "".runtestOf("smp".getUrl)
+
+  test "lihat nama, alamat, dan jumlah siswa derajat SMA":
+    "".runtestOf("sma".getUrl)
