@@ -16,3 +16,11 @@ suite "API Disdukcapil":
     runtestOf("h9v6thxprj", "dapodik".getUrl("disdikcapil") & nik)
   test "API data penduduk untuk sample":
     runtestOf("", "disdukcapil".getUrl("nama") & nik)
+
+  let disdukcapilurl = $urlmantra & "disdukcapil/data/"
+  test "API untuk dapat range umur":
+    "".runtestOf(disdukcapilurl & "range_umur")
+  test "API untuk dapat angkatan kerja":
+    "".runtestOf(disdukcapilurl & "angkatan_kerja")
+  test "API untuk rekapitulasi data":
+    "".runtestOf(disdukcapilurl & "rekap")
