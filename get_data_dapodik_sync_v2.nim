@@ -34,6 +34,7 @@ proc getEntry(link: string, client: var HttpClient, update = true): Entry =
       else:
         return client.getContent(link).parseJson["data"][0].getEntry client
     except:
+      echo link, ".getEntry: ", getCurrentExceptionMsg()
       client = newHttpClient()
 
 proc insertSekolah(db: DbConn, client: var HttpClient, npsn: string) =
@@ -51,13 +52,18 @@ proc processEntry(db: DbConn, client: var HttpClient, themod: NpsnInfo): bool =
         oldObj = dbModSekolah[npsn]
         oldMod = oldObj.lastMod.toTime
       if oldMod < newMod.toTime:
+        when defined(debuged):
+          echo "to retrieve sekolah: ", oldObj
         retrieveSekolah db, client, oldObj.id
         result = true
     else:
+      when defined(debuged): echo "to insert sekolah @processEntry ", npsn
       insertSekolah db, client, npsn
       result = true
 
 proc processData(db: DbConn, client: var HttpClient, url: string): bool =
+  when defined(debuged):
+    echo "to fetch the data: ", url
   var
     toprocess = newTable[string, TimeInfo]()
     html = client.get(url).bodyStream.parseHtml
@@ -71,6 +77,8 @@ proc processData(db: DbConn, client: var HttpClient, url: string): bool =
       thetime = last.parse("yyyy-MM-dd' 'HH:mm:ss")
 
     toprocess[npsn] = thetime
+  when defined(debuged):
+    echo "to process @processData"
   db.processEntry client, toprocess
 
 when isMainModule:

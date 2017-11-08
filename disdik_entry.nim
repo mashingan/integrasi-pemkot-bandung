@@ -136,6 +136,7 @@ proc getEntry*(item: JsonNode, client: var HttpClient): Entry =
           parseJson["data"]["relationships"]
         break
       except:
+        echo "getEntry.detail: ", getCurrentExceptionMsg()
         client = newHttpClient()
 
     let
@@ -163,6 +164,7 @@ proc getEntry*(item: JsonNode, client: var HttpClient): Entry =
         kepsek = client.getContent(toKepsek).parseJson["data"]
         break
       except:
+        echo "getEntry.kepsek: ", getCurrentExceptionMsg()
         client = newHttpClient()
     let
       #kepsek = client.getContent(toKepsek).parseJson["data"]
@@ -204,6 +206,7 @@ proc getEntry*(item: JsonNode, client: var HttpClient): Entry =
           parseJson["data"]["attributes"]
         break
       except:
+        echo "getEntry.detailSemester: ", getCurrentExceptionMsg()
         client = newHttpClient()
     let
       #[
@@ -238,7 +241,7 @@ proc getEntry*(item: JsonNode, client: var HttpClient): Entry =
       jenjang: sekolahJenjang
     )
   except KeyError:
-    echo "error something happens: ", getCurrentExceptionMsg()
+    echo "getEntry.KeyError: ", getCurrentExceptionMsg()
     Entry()
   # end of `proc getEntry`
 
@@ -269,4 +272,4 @@ proc updateEntry*(db: DbConn, tableName: string, entry: Entry) =
     db.exec(sql"delete from sekolah where npsn = ?;", entry.npsn)
     db.insertEntry tableName, entry
   except DbError:
-    echo "error happened: ", getCurrentExceptionMsg()
+    echo "update error: ", getCurrentExceptionMsg()

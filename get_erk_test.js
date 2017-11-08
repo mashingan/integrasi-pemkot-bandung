@@ -28,7 +28,8 @@ console.log(args);
 //http://mantra.bandung.go.id/mantra/api/bkpp/erk_aktifitas/lihat_isi/table=master_aktifitas&fields=kode_aktifitas-nama_aktifitas&filter=none&page=1&limit=10&order=none&id=7na9aj3awo&key=895b8df16bb5ffddcc93b2ed2bfbdbe87428211c&time=1496214247434"
 var result;
 lib.getReq({
-  port: 80,
+  //port: 80,
+  port: 443,
   method: 'GET',
   host: 'mantra.bandung.go.id',
   //path: '/mantra/json/bkpp/erk_aktifitas/lihat_isi/' +
